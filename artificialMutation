@@ -1,0 +1,91 @@
+#! /usr/bin/perl -w
+use strict;
+use Data::Dumper;
+
+my @alpha = ("A","C","G","T");
+open(SIG, "< /Users/starrettgj/Documents/signature_test.txt");
+my %sigHash;
+my $sigNum = 0;
+while (<SIG>) {
+  chomp($_);
+  my @f = split("\t",$_);
+  for (my $g = 0; $g < scalar @f; $g++) {
+    my $i = int($g/48);
+    my $k = int(($g - $i*48)/12);
+    my $j = int(($g - $i*48 - $k*12)/3);
+    my $l = $g - $i*48 - $k*12 - $j*4;
+    my @malpha = @alpha;
+    for (my $b = 0; $b < scalar @malpha; $b++) {
+      splice(@malpha, $b, 1) if $alpha[$j] eq $malpha[$b];
+    }
+    my $wtrint = join("", $alpha[$i],$alpha[$j],$alpha[$k]);
+    my $mtrint = join("",$alpha[$i],$malpha[$l],$alpha[$k]);
+    #print "$wtrint>$mtrint\n";
+    unless ($j == $l) {
+      ${${$sigHash{$sigNum}}{$wtrint}}[0] += $f[$g];
+      ${${${$sigHash{$sigNum}}{$wtrint}}[1]}{$mtrint} = $f[$g];
+    }
+  }
+  $sigNum++;
+}
+
+my $seqLen = shift;
+my $mode = shift;
+my $iter = shift;
+my $r = shift;
+chomp($iter);
+my $newSeq = &seqGenerate($seqLen);
+print ">original\n", $newSeq, "\n";
+my @mutants = &mutate(0,$iter,$newSeq,$mode,$r);
+print join("\n",@mutants);
+
+
+#print Dumper(%sigHash);
+
+sub seqGenerate {
+  my $len = shift;
+  my $seq = "";
+  for (my $i = 0; $i<$len; $i++) {
+    $seq .= $alpha[int(rand(4))];
+  }
+  return $seq;
+}
+
+
+sub mutate {
+  my $signature = shift;
+  my $iterations = shift;
+  my $seq = shift;
+  my $modeBool = shift;
+  my %mutHash;
+  my $rate = shift;
+  my @return;
+  for (my $i = 0; $i<$iterations; $i++) {
+    my @f = split("", $seq);
+    for (my $j = 1; $j < scalar @f-1; $j++) {
+      my $trint = join("",@f[$j-1,$j,$j+1]);
+      my @tmp = @{${$sigHash{$signature}}{$trint}};
+      my $prob = 0;
+      $prob = $tmp[0] if defined $tmp[0];
+      my @test;
+      #print $trint, ": ", $prob, "\n";
+      if (rand() < $prob/$rate) {
+        for my $key (keys %{$tmp[1]}) {
+          push(@test, ($key)x(${$tmp[1]}{$key}*100000));
+        }
+        #print Dumper(@test);
+        my $pick = $test[ rand @test ];
+        #print $pick, "\n";
+        my @g = split("", $pick);
+        $f[$j] = $g[1];
+      }
+    }
+    my $mutSeq = join("", @f);
+    $mutHash{$i} = $mutSeq;
+    if ($modeBool == 1) {
+      $seq = $mutSeq;
+    }
+    push(@return, ">$i\n$mutSeq");
+  }
+  return @return;
+}
